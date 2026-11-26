@@ -17,7 +17,7 @@ const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 };
-const S = Object.assign({ total: 20, feel: 30, let: 120, voice: 'pocket', pv: 'juergen', key: '', model: DEFAULT_MODEL, person: 'mix', cloneId: 0 }, LS.get('ll-set', {}));
+const S = Object.assign({ total: 20, feel: 30, let: 120, voice: 'pocket', pv: 'juergen', key: '', model: DEFAULT_MODEL, person: 'mix', cloneId: 0, announce: false, mode: 'timer' }, LS.get('ll-set', {}));
 const saveS = () => LS.set('ll-set', S);
 let OWN = LS.get('ll-own', []);           // [{name, created, count}]
 const saveOwn = () => LS.set('ll-own', OWN);
@@ -197,7 +197,14 @@ function say(text) {
   browserSpeak(text);
 }
 
+const announce = t => { if (S.announce) say(t); };
+
 // ---------- Gemini ----------
+function fallbackQuestions(f) {
+  const w = f && f !== '…' ? f : 'dieses Gefühl';
+  return [`Kannst du ${w} gerade einfach da sein lassen?`, `Könntest du ${w} loslassen?`, `Würdest du ${w} loslassen?`, 'Wann?',
+    `Steckt unter ${w} ein Wunsch nach Anerkennung, Kontrolle oder Sicherheit?`, 'Könntest du diesen Wunsch loslassen?', 'Würdest du?', 'Wann?'];
+}
 function fallbackSentences(f) {
   const w = f && f !== '…' ? f : 'dieses Gefühl';
   return [`Da ist ${w}.`, `${w}. Genau jetzt.`, `Wann war ${w} heute schon da?`, `Lass ${w} noch einmal ganz hochkommen.`];
@@ -223,14 +230,22 @@ So entstehen die Sätze:
 - Verschiedene Sätze sollen verschiedene Glaubenssätze oder Seiten davon treffen, nicht dasselbe fünfmal.
 - Präsens, höchstens 10 Wörter, gesprochene Sprache. Konkrete Situationen und meine eigenen Wörter aus dem Audio nutzen, wo möglich.
 - Nur, was im Audio oder im Gefühl angelegt ist: nichts Härteres erfinden, keine Themen dazudichten.
-- Keine Körperanweisungen, keine Ratschläge, keine Lösungen, kein Trost, keine Relativierung, keine Fragen.`;
+- Keine Körperanweisungen, keine Ratschläge, keine Lösungen, kein Trost, keine Relativierung, keine Fragen.
+
+4. Schreibe Leitfragen nach der Sedona-Methode in "questions": 2 bis 3 Zyklen mit je 4 Fragen in dieser Reihenfolge:
+   a) Zulassen: "Kannst du … gerade da sein lassen / willkommen heißen?"
+   b) "Könntest du … loslassen?"
+   c) "Würdest du … loslassen?"
+   d) "Wann?" (darf leicht variieren, z. B. "Wann würdest du … loslassen?")
+   Jeder Zyklus nimmt einen anderen konkreten Aspekt aus dem Audio (Situation, Glaubenssatz, Befürchtung) und nennt ihn in den Fragen beim Namen, z. B. "Könntest du die Unsicherheit wegen der Hausarbeit loslassen?". Ein Zyklus darf stattdessen nach dem Wunsch darunter fragen (Anerkennung, Kontrolle oder Sicherheit), z. B. "Könntest du den Wunsch loslassen, dass dein Dozent dich gut findet?".
+   Du-Form, höchstens 14 Wörter, warm und direkt, keine Erklärungen. Die Fragen sollen berühren, nicht abstrakt sein.`;
   const parts = [{ text: prompt }];
   if (audioB64) parts.push({ inline_data: { mime_type: 'audio/wav', data: audioB64 } });
   const body = {
     contents: [{ role: 'user', parts }],
     generationConfig: {
       temperature: 0.6, responseMimeType: 'application/json',
-      responseSchema: { type: 'OBJECT', properties: { transcript: { type: 'STRING' }, label: { type: 'STRING' }, sentences: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['label', 'sentences'] }
+      responseSchema: { type: 'OBJECT', properties: { transcript: { type: 'STRING' }, label: { type: 'STRING' }, sentences: { type: 'ARRAY', items: { type: 'STRING' } }, questions: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['label', 'sentences', 'questions'] }
     }
   };
   const model = (S.model || DEFAULT_MODEL).trim();
@@ -243,6 +258,7 @@ So entstehen die Sätze:
   const out = JSON.parse(txt);
   out.sentences = (out.sentences || []).map(s => String(s).trim()).filter(Boolean).slice(0, 6);
   if (!out.sentences.length) throw new Error('keine Sätze erhalten');
+  out.questions = (out.questions || []).map(s => String(s).trim()).filter(Boolean).slice(0, 12);
   return out;
 }
 
@@ -259,14 +275,14 @@ function ring(el, now) { $(el).setAttribute('stroke-dashoffset', String(Math.min
 const over = () => Date.now() >= sessionEnd;
 
 function begin() {
-  S.total = +$('oTotal').value; S.feel = +$('oFeel').value; S.let = +$('oLet').value; S.voice = $('oVoice').value; saveS();
+  S.total = +$('oTotal').value; S.feel = +$('oFeel').value; S.let = +$('oLet').value; S.voice = $('oVoice').value; S.announce = $('oAnn').value === '1'; S.mode = $('oMode').value; saveS();
   audioCtx(); lock();
   log = []; sessionStart = Date.now(); sessionEnd = sessionStart + S.total * 60000;
   if (S.voice === 'pocket') { loadPromptCache(); getEngine().catch(() => {}); }
   gong(); setTimeout(toFeel, 60);
 }
-function toFeel() { if (over()) return finish(); show('feel'); phase(S.feel); say(SAY.feel); }
-function toChoose() { if (over()) return finish(); show('choose'); renderGrid(); setRecBtn(); gong(true); say(SAY.choose); }
+function toFeel() { if (over()) return finish(); show('feel'); phase(S.feel); announce(SAY.feel); }
+function toChoose() { if (over()) return finish(); show('choose'); renderGrid(); setRecBtn(); gong(true); announce(SAY.choose); }
 
 function renderGrid() {
   const own = OWN.filter(o => !FEEL.includes(o.name)).sort((a, b) => (b.count || 0) - (a.count || 0));
@@ -310,7 +326,7 @@ async function pick(f) {
   else rememberOwn(f);
   $('own').value = ''; $('own').blur();
   const audio = pending; pending = null;
-  cur = { t: new Date().toISOString(), f, r: 1, gone: false, hadAudio: !!audio, transcript: '', sentences: fallbackSentences(f), source: 'standard', audio: [], idx: 0 };
+  cur = { t: new Date().toISOString(), f, r: 1, gone: false, hadAudio: !!audio, transcript: '', sentences: fallbackSentences(f), source: 'standard', audio: [], idx: 0, questions: fallbackQuestions(f), qaudio: [], qi: 0 };
   log.push(cur);
   toLet();
   makeSentences(cur, audio);
@@ -322,18 +338,40 @@ async function makeSentences(entry, audio) {
       const out = await gemini(entry.f, audio && audio.b64);
       entry.sentences = out.sentences; entry.transcript = out.transcript || ''; entry.label = out.label || '';
       entry.source = 'gemini'; entry.idx = 0; entry.audio = [];
+      if (out.questions.length >= 4) { entry.questions = out.questions; entry.qaudio = []; entry.qSwitch = true; }
       if (entry.f === '…' && out.label) { entry.f = out.label; if (cur === entry && state === 'let') setWord(entry.f); }
     } catch (e) { entry.source = 'standard'; entry.error = String(e.message || e); }
   }
   setBackInfo();
   if (S.voice === 'pocket') {
-    const list = entry.sentences;
-    for (let i = 0; i < list.length; i++) {
-      try { const a = await synth(list[i]); if (entry.sentences === list) entry.audio[i] = a; } catch (e) { break; }
-      setBackInfo();
+    const jobs = [['sentences', 'audio'], ['questions', 'qaudio']];
+    if (S.mode === 'sedona') jobs.reverse();
+    for (const [k, ak] of jobs) {
+      const list = entry[k];
+      for (let i = 0; i < list.length; i++) {
+        if (entry[ak][i]) continue;
+        try { const a = await synth(list[i]); if (entry[k] === list) entry[ak][i] = a; } catch (e) { return; }
+        setBackInfo();
+      }
     }
   }
 }
+// Sedona-Modus: selbst getaktete Leitfragen
+function speakItem(text, store, i) {
+  if (S.voice === 'off') return;
+  if (S.voice === 'pocket' && store[i]) return playSamples(store[i]);
+  if (S.voice === 'pocket' && engine) return void synth(text).then(a => { store[i] = store[i] || a; if (state === 'let') playSamples(a); }).catch(() => browserSpeak(text));
+  browserSpeak(text);
+}
+function showQuestion(speak = true) {
+  if (cur.qSwitch) { cur.qSwitch = false; cur.qi = 0; }
+  const n = cur.questions.length, i = cur.qi % n;
+  const p = $('letPrompt'); p.textContent = cur.questions[i];
+  $('tL').textContent = `Frage ${i % 4 + 1} von 4 · Zyklus ${Math.floor(cur.qi / 4) + 1}`;
+  $('rL').setAttribute('stroke-dashoffset', String(100 - 100 * ((i % 4) + 1) / 4));
+  if (speak) speakItem(cur.questions[i], cur.qaudio, i);
+}
+function nextQuestion() { if (!cur) return; cur.qi++; $('said').textContent = ''; showQuestion(); }
 function setBackInfo() {
   if (!cur) return;
   const n = cur.sentences.length, ready = cur.audio.filter(Boolean).length;
@@ -361,26 +399,30 @@ function backToFeeling() {
 
 function setWord(w) { const el = $('letWord'); el.textContent = w; el.classList.toggle('long', w.length > 11); }
 function toLet() {
+  const sed = S.mode === 'sedona';
+  $('let').classList.toggle('sedona', sed);
   show('let'); setWord(cur.f); $('said').textContent = '';
   phase(S.let); pi = 0; nextPrompt = Date.now() + 24000;
-  $('letPrompt').textContent = PROMPTS[0]; say(PROMPTS[0]); setBackInfo();
+  if (sed) { showQuestion(); }
+  else { $('letPrompt').textContent = PROMPTS[0]; announce(PROMPTS[0]); }
+  setBackInfo();
 }
 function toCheck() {
   if (over()) return finish();
   show('check');
-  $('moreLbl').textContent = `nochmal ${S.let >= 120 ? S.let / 60 + ' Min' : S.let + ' Sek'} mit „${cur.f}“`;
-  gong(); say(SAY.check);
+  $('moreLbl').textContent = S.mode === 'sedona' ? `weiter fragen zu „${cur.f}“` : `nochmal ${S.let >= 120 ? S.let / 60 + ' Min' : S.let + ' Sek'} mit „${cur.f}“`;
+  gong(); announce(SAY.check);
 }
 function finish() {
   if (state === 'end') return;
   clearInterval(recTimer); if (rec) recStop().catch(() => {});
-  show('end'); gong(); say(SAY.end);
+  show('end'); gong(); announce(SAY.end);
   try { wake && wake.release(); } catch (e) {}
   const mins = Math.round((Date.now() - sessionStart) / 60000);
   $('sum').textContent = log.length ? `${mins} Min · ${log.length} Gefühle · ${log.reduce((a, b) => a + b.r, 0)} Runden Loslassen` : `${mins} Min · nichts notiert`;
   $('log').innerHTML = log.map(l => `<div class="row"><span class="t">${esc(hm(l.t))}</span><span class="fw">${esc(l.f)}</span><span class="n">${l.r}×${l.gone ? ' gegangen' : ''}</span>${l.transcript ? `<p class="d">„${esc(l.transcript)}“</p>` : ''}${l.source === 'gemini' ? `<p class="d">${l.sentences.map(esc).join(' · ')}</p>` : ''}</div>`).join('') || '<p class="small">Keine Einträge.</p>';
   const sessions = LS.get('ll-log', []);
-  sessions.push({ start: new Date(sessionStart).toISOString(), minutes: mins, entries: log.map(({ audio, idx, ...rest }) => rest) });
+  sessions.push({ start: new Date(sessionStart).toISOString(), minutes: mins, entries: log.map(({ audio, qaudio, idx, qSwitch, ...rest }) => rest) });
   LS.set('ll-log', sessions.slice(-200));
 }
 
@@ -390,12 +432,13 @@ setInterval(() => {
   const txt = rem > 0 ? `noch ${Math.ceil(rem / 60000)} Min` : 'Zeit ist um';
   document.querySelectorAll('.rest').forEach(e => e.textContent = txt);
   if (state === 'feel') { $('tF').textContent = fmt(phaseEnd - now); ring('rF', now); if (now >= phaseEnd) toChoose(); }
+  else if (state === 'let' && S.mode === 'sedona') { /* selbst getaktet */ }
   else if (state === 'let') {
     $('tL').textContent = fmt(phaseEnd - now); ring('rL', now);
     if (now >= nextPrompt && phaseEnd - now > 8000) {
       pi = (pi + 1) % PROMPTS.length; const p = $('letPrompt'); p.style.opacity = 0;
       setTimeout(() => { p.textContent = PROMPTS[pi]; p.style.opacity = 1; }, 500);
-      say(PROMPTS[pi]); nextPrompt = now + 26000;
+      announce(PROMPTS[pi]); nextPrompt = now + 26000;
     }
     if (now >= phaseEnd) toCheck();
   } else if (state === 'choose' && rem <= 0 && !rec) finish();
@@ -429,7 +472,7 @@ $('ownList').onclick = e => { const b = e.target.closest('[data-del]'); if (!b) 
 
 // ---------- Einstellungen ----------
 function syncStart() {
-  $('oTotal').value = S.total; $('oFeel').value = S.feel; $('oLet').value = S.let; $('oVoice').value = S.voice;
+  $('oTotal').value = S.total; $('oFeel').value = S.feel; $('oLet').value = S.let; $('oVoice').value = S.voice; $('oAnn').value = S.announce ? '1' : '0'; $('oMode').value = S.mode;
   const parts = [];
   parts.push(S.key ? 'Gemini verbunden' : 'Ohne Gemini (Standardsätze)');
   if (S.voice === 'pocket') parts.push(engine ? 'KI-Stimme geladen' : 'KI-Stimme lädt beim Start');
@@ -511,6 +554,7 @@ $('grid').onclick = e => { const b = e.target.closest('[data-f]'); if (b) pick(b
 $('ownF').onsubmit = e => { e.preventDefault(); pick($('own').value); };
 $('bBack').onclick = backToFeeling;
 $('bAnchor').onclick = anchor;
+$('bNext').onclick = nextQuestion;
 $('bLetDone').onclick = () => { cur.gone = true; toCheck(); };
 $('bMore').onclick = () => { cur.r++; cur.gone = false; toLet(); };
 $('bAgain').onclick = toFeel;

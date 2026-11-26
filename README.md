@@ -11,6 +11,10 @@ Meditations-PWA nach David R. Hawkins' *Letting Go*: spüren, benennen, da sein 
    - **In den Körper**: feste Anker-Sätze für den Fall, dass du dissoziiert bist
 4. **Mehr Zeit** oder **Neu reinspüren**
 
+**Sedona-Modus** (Option auf dem Startscreen): Statt des Timers kommen Leitfragen, die du selbst mit „Nächste Frage“ weiterschaltest. Ein Zyklus hat vier Fragen: Zulassen, Könntest du, Würdest du, Wann. Gemini schreibt sie passend zu deiner Aufnahme, bis zu drei Zyklen zu verschiedenen Aspekten. Die beiden Knöpfe „Gefühl verstärken“ und „In den Körper“ bleiben.
+
+**Ansagen** (Gong-Begleittexte und Impulse) sind standardmäßig aus und lassen sich auf dem Startscreen einschalten.
+
 ## Einrichtung
 
 1. GitHub Pages für den Branch `main` (Root) aktivieren.
