@@ -45,8 +45,9 @@ select,input[type=text],input[type=password]{font:16px system-ui,sans-serif;back
 .time{color:var(--dim);font-size:16px;margin-top:6px;font-variant-numeric:tabular-nums}
 .prompt{min-height:2.8em;text-align:center;font-size:19px;font-weight:300;max-width:30ch;margin:0 auto 8px;transition:opacity .6s}
 .sub{border:0;background:var(--btn);color:var(--ink);border-radius:22px;font-size:20px;min-height:72px;width:100%}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
-.back{border:0;border-radius:28px;background:var(--rose);color:#1a1422;font-size:clamp(21px,6.4vw,28px);font-weight:600;min-height:34dvh;width:100%;line-height:1.15;padding:10px}
+.two{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.back.love{background:#4a2f3a;color:#ffd6c2}.back.love.on{background:#ffd6c2;color:#3a1f28}
+.back{border:0;border-radius:24px;background:var(--rose);color:#1a1422;font-size:clamp(17px,5vw,24px);font-weight:600;min-height:34dvh;width:100%;line-height:1.15;padding:10px}
 .back.anc{background:#3a3150;color:var(--lil)}
 .next{display:none;border:0;border-radius:28px;background:var(--lil);color:#1a1422;font-size:28px;font-weight:600;min-height:24dvh;width:100%;margin-bottom:10px}
 .next:active{transform:scale(.985);filter:brightness(1.15)}
@@ -58,7 +59,7 @@ select,input[type=text],input[type=password]{font:16px system-ui,sans-serif;back
 #let.sedona .back{min-height:17dvh;font-size:clamp(18px,5vw,22px)}
 #let.sedona .back small{display:none}
 #let.sedona .sub{min-height:52px;font-size:17px}
-.back small{display:block;font-size:15px;font-weight:400;opacity:.75;margin-top:6px}
+.back small{display:block;font-size:14px;hyphens:auto;-webkit-hyphens:auto;font-weight:400;opacity:.75;margin-top:6px}
 .grid{flex:1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:minmax(64px,1fr);gap:10px;margin-top:6px;overflow:auto;align-content:stretch}
 .tile{border:0;border-radius:20px;background:var(--btn);color:var(--ink);font-size:clamp(19px,5.6vw,24px);padding:6px;overflow-wrap:anywhere}
 .tile:nth-child(4n+2),.tile:nth-child(4n+3){background:var(--btn2)}
@@ -140,6 +141,16 @@ select,input[type=text],input[type=password]{font:16px system-ui,sans-serif;back
       <p class="small" id="cOut"></p>
     </div>
 
+    <h2>Musik für den Liebe-Knopf</h2>
+    <div class="card">
+      <p class="small">Lade ein oder mehrere Stücke (MP3, M4A, OGG). Sie bleiben in der App gespeichert. Der Knopf blendet weich ein und beim zweiten Tippen weich aus und setzt beim nächsten Mal an derselben Stelle fort. Ohne eigene Musik spielt ein warmer, synthetischer Klangteppich.</p>
+      <div class="chips" id="musicList"></div>
+      <label class="f">Was spielt der Knopf?<select id="sMusicSel"></select></label>
+      <div class="btns"><button id="mAdd">Musik hinzufügen</button><button id="mTest">Probehören</button></div>
+      <input type="file" id="mFile" accept="audio/*" multiple hidden>
+      <p class="small" id="mOut"></p>
+    </div>
+
     <h2>Meine Gefühle</h2>
     <div class="card">
       <div class="chips" id="ownList"></div>
@@ -180,6 +191,7 @@ select,input[type=text],input[type=password]{font:16px system-ui,sans-serif;back
   <div class="two">
     <button class="back" id="bBack">Gefühl verstärken<small id="backInfo">werden erstellt …</small></button>
     <button class="back anc" id="bAnchor">In den Körper<small>Anker, wenn du weg bist</small></button>
+    <button class="back love" id="bLove">Liebe<small id="loveInfo">Musik</small></button>
   </div>
   <button class="next" id="bNext">Nächste Frage</button>
   <button class="sub" id="bLetDone">Ist gegangen</button>

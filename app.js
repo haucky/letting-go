@@ -262,6 +262,95 @@ So entstehen die Sätze:
   return out;
 }
 
+// ---------- Musik (Liebe-Knopf) ----------
+let tracks = [];                 // [{id, name}] – Blobs liegen in IndexedDB unter 'm|<id>'
+let music = null;                // {el|pad, url, id, fadeT}
+const posMemo = {};
+async function loadTracks() { tracks = (await idb.get('tracks')) || []; }
+function pickTrack() {
+  if (!tracks.length) return null;
+  if (S.music === 'rotate') { S.musicIdx = ((S.musicIdx || 0) + 1) % tracks.length; saveS(); return tracks[S.musicIdx]; }
+  return tracks.find(t => String(t.id) === String(S.music)) || tracks[0];
+}
+function fade(m, to, ms, done) {
+  clearInterval(m.fadeT);
+  const el = m.el, from = el.volume, t0 = Date.now();
+  m.fadeT = setInterval(() => {
+    const k = Math.min(1, (Date.now() - t0) / ms); el.volume = Math.max(0, Math.min(1, from + (to - from) * k));
+    if (k >= 1) { clearInterval(m.fadeT); done && done(); }
+  }, 50);
+}
+function makePad() {
+  const c = audioCtx(); if (!c) return null;
+  const out = c.createGain(); out.gain.value = 0; out.connect(c.destination);
+  const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900; lp.connect(out);
+  const oscs = [174.61, 220, 261.63, 349.23, 440].flatMap((f, i) => [-3, 3].map(d => {
+    const o = c.createOscillator(), g = c.createGain(); o.type = i < 2 ? 'sine' : 'triangle';
+    o.frequency.value = f; o.detune.value = d; g.gain.value = 0.05 / (1 + i * .4);
+    const l = c.createOscillator(), lg = c.createGain(); l.frequency.value = 0.07 + i * 0.03; lg.gain.value = 0.02;
+    l.connect(lg).connect(g.gain); o.connect(g).connect(lp); o.start(); l.start(); return [o, l];
+  })).flat();
+  return { out, oscs, c };
+}
+async function startMusic() {
+  audioCtx();
+  const t = pickTrack();
+  if (t) {
+    const blob = await idb.get('m|' + t.id);
+    if (blob) {
+      const url = URL.createObjectURL(blob); const el = new Audio(url); el.loop = true; el.volume = 0;
+      el.currentTime = posMemo[t.id] || 0;
+      music = { el, url, id: t.id, name: t.name };
+      try { await el.play(); } catch (e) { stopMusicNow(); return false; }
+      fade(music, 0.85, 4000); return true;
+    }
+  }
+  const pad = makePad(); if (!pad) return false;
+  music = { pad, name: 'Klangteppich' };
+  pad.out.gain.setTargetAtTime(0.55, pad.c.currentTime, 1.4); return true;
+}
+function release(m) {
+  clearInterval(m.fadeT);
+  if (m.el) { m.el.pause(); URL.revokeObjectURL(m.url); }
+  if (m.pad) m.pad.oscs.forEach(o => { try { o.stop(); } catch (e) {} });
+}
+function stopMusicNow() { if (music) { const m = music; music = null; if (m.el) posMemo[m.id] = m.el.currentTime; release(m); } }
+function stopMusic(ms = 3000) {
+  if (!music) return setLove(false);
+  const m = music; music = null;                     // sofort frei: nächster Tipp startet neu
+  if (m.el) { posMemo[m.id] = m.el.currentTime + ms / 1000; fade(m, 0, ms, () => release(m)); }
+  else { m.pad.out.gain.setTargetAtTime(0, m.pad.c.currentTime, ms / 4000); setTimeout(() => release(m), ms + 500); }
+  setLove(false);
+}
+function setLove(on) {
+  $('bLove').classList.toggle('on', !!on);
+  $('loveInfo').textContent = on ? (music && music.name ? music.name.replace(/\.[a-z0-9]+$/i, '') : 'läuft') + ' läuft' : (tracks.length ? 'Musik' : 'Klangteppich');
+}
+async function toggleLove() {
+  if (music) return stopMusic();
+  setLove(true);
+  if (!(await startMusic())) setLove(false); else setLove(true);
+}
+function renderMusic() {
+  $('musicList').innerHTML = tracks.length ? tracks.map((t, i) => `<span class="chip">${esc(t.name)}<button data-mdel="${i}" aria-label="${esc(t.name)} löschen">×</button></span>`).join('') : '<p class="small">Noch keine Musik geladen.</p>';
+  $('sMusicSel').innerHTML = (tracks.length > 1 ? '<option value="rotate">Abwechselnd</option>' : '') + tracks.map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('') + (tracks.length ? '' : '<option value="">Klangteppich</option>');
+  $('sMusicSel').value = S.music && (S.music === 'rotate' || tracks.some(t => String(t.id) === String(S.music))) ? S.music : (tracks[0] ? String(tracks[0].id) : '');
+}
+$('mAdd').onclick = () => $('mFile').click();
+$('mFile').onchange = async e => {
+  const files = [...e.target.files]; e.target.value = '';
+  $('mOut').textContent = 'Speichere …';
+  for (const f of files) { const id = Date.now() + '-' + Math.random().toString(36).slice(2, 7); await idb.set('m|' + id, f); tracks.push({ id, name: f.name }); }
+  await idb.set('tracks', tracks); renderMusic(); $('mOut').textContent = `${files.length} Stück(e) gespeichert.`;
+};
+$('musicList').onclick = async e => {
+  const b = e.target.closest('[data-mdel]'); if (!b) return;
+  const [t] = tracks.splice(+b.dataset.mdel, 1); await idb.set('m|' + t.id, null); await idb.set('tracks', tracks); renderMusic();
+};
+$('sMusicSel').onchange = () => { S.music = $('sMusicSel').value; saveS(); };
+$('mTest').onclick = async () => { if (music) { stopMusic(1500); $('mTest').textContent = 'Probehören'; } else { await startMusic(); $('mTest').textContent = 'Ausblenden'; } };
+loadTracks();
+
 // ---------- Sitzung ----------
 let state = 'start', phaseEnd = 0, phaseLen = 1, sessionEnd = 0, sessionStart = 0, cur = null, log = [], pi = 0, nextPrompt = 0, wake = null, pending = null;
 
@@ -405,7 +494,7 @@ function toLet() {
   phase(S.let); pi = 0; nextPrompt = Date.now() + 24000;
   if (sed) { showQuestion(); }
   else { $('letPrompt').textContent = PROMPTS[0]; announce(PROMPTS[0]); }
-  setBackInfo();
+  setBackInfo(); setLove(!!music);
 }
 function toCheck() {
   if (over()) return finish();
@@ -416,6 +505,7 @@ function toCheck() {
 function finish() {
   if (state === 'end') return;
   clearInterval(recTimer); if (rec) recStop().catch(() => {});
+  stopMusic(4000);
   show('end'); gong(); announce(SAY.end);
   try { wake && wake.release(); } catch (e) {}
   const mins = Math.round((Date.now() - sessionStart) / 60000);
@@ -480,10 +570,10 @@ function syncStart() {
 }
 function openSettings() {
   $('sKey').value = S.key; $('sModel').value = S.model; $('sPerson').value = FORM[S.person] ? S.person : 'mix'; $('sPV').value = S.pv;
-  $('refText').textContent = REF_TEXT; renderOwn(); show('settings');
+  $('refText').textContent = REF_TEXT; renderOwn(); renderMusic(); show('settings');
 }
 $('toSet').onclick = openSettings;
-$('setBack').onclick = () => { S.key = $('sKey').value.trim(); S.model = $('sModel').value.trim() || DEFAULT_MODEL; S.person = $('sPerson').value; saveS(); syncStart(); show('start'); };
+$('setBack').onclick = () => { stopMusic(800); $('mTest').textContent = 'Probehören'; S.key = $('sKey').value.trim(); S.model = $('sModel').value.trim() || DEFAULT_MODEL; S.person = $('sPerson').value; saveS(); syncStart(); show('start'); };
 $('sKey').onchange = () => { S.key = $('sKey').value.trim(); saveS(); };
 $('sModel').onchange = () => { S.model = $('sModel').value.trim() || DEFAULT_MODEL; saveS(); };
 $('sPerson').onchange = () => { S.person = $('sPerson').value; saveS(); };
@@ -554,6 +644,7 @@ $('grid').onclick = e => { const b = e.target.closest('[data-f]'); if (b) pick(b
 $('ownF').onsubmit = e => { e.preventDefault(); pick($('own').value); };
 $('bBack').onclick = backToFeeling;
 $('bAnchor').onclick = anchor;
+$('bLove').onclick = toggleLove;
 $('bNext').onclick = nextQuestion;
 $('bLetDone').onclick = () => { cur.gone = true; toCheck(); };
 $('bMore').onclick = () => { cur.r++; cur.gone = false; toLet(); };
