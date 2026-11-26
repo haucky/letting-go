@@ -36,7 +36,13 @@ const idb = (() => {
       t.oncomplete = () => res(req && req.result); t.onerror = () => rej(t.error);
     });
   };
-  return { get: k => run('readonly', s => s.get(k)).catch(() => undefined), set: (k, v) => run('readwrite', s => s.put(v, k)).catch(() => {}) };
+  return {
+    get: k => run('readonly', s => s.get(k)).catch(() => undefined),
+    set: (k, v) => run('readwrite', s => s.put(v, k)).catch(() => {}),
+    getStrict: k => run('readonly', s => s.get(k)),          // wirft Fehler weiter
+    setStrict: (k, v) => run('readwrite', s => s.put(v, k)),
+    del: k => run('readwrite', s => s.delete(k)).catch(() => {})
+  };
 })();
 try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) {}
 
@@ -292,21 +298,43 @@ function makePad() {
   })).flat();
   return { out, oscs, c };
 }
+const AUDIO_TYPES = { mp3: 'audio/mpeg', m4a: 'audio/mp4', aac: 'audio/aac', ogg: 'audio/ogg', opus: 'audio/ogg', wav: 'audio/wav', flac: 'audio/flac', webm: 'audio/webm' };
+const guessType = name => AUDIO_TYPES[(name.split('.').pop() || '').toLowerCase()] || '';
+// Liest ein Stück als Blob. Ältere Versionen haben das File-Objekt selbst gespeichert;
+// das kann auf Android später unlesbar werden. Lesbare Altdaten werden in eine echte Kopie umgewandelt.
+async function trackBlob(t) {
+  let rec;
+  try { rec = await idb.getStrict('m|' + t.id); } catch (e) { throw new Error('Speicher nicht lesbar (' + (e && e.name || e) + ')'); }
+  if (!rec) throw new Error('Datei fehlt im App-Speicher');
+  if (rec.buf) return new Blob([rec.buf], { type: rec.type || guessType(t.name) });
+  if (rec instanceof Blob) {
+    let buf;
+    try { buf = await rec.arrayBuffer(); } catch (e) { throw new Error('Datei nicht mehr lesbar, keine Berechtigung (' + (e && e.name || e) + ')'); }
+    const type = rec.type || guessType(t.name);
+    try { await idb.setStrict('m|' + t.id, { buf, type, size: buf.byteLength }); } catch (e) {}
+    return new Blob([buf], { type });
+  }
+  throw new Error('unbekanntes Format im Speicher');
+}
+let musicError = '';
 async function startMusic() {
-  audioCtx();
+  audioCtx(); musicError = '';
   const t = pickTrack();
   if (t) {
-    const blob = await idb.get('m|' + t.id);
-    if (blob) {
+    try {
+      const blob = await trackBlob(t);
       const url = URL.createObjectURL(blob); const el = new Audio(url); el.loop = true; el.volume = 0;
       el.currentTime = posMemo[t.id] || 0;
       music = { el, url, id: t.id, name: t.name };
-      try { await el.play(); } catch (e) { stopMusicNow(); return false; }
+      try { await el.play(); } catch (e) { stopMusicNow(); throw new Error('Abspielen fehlgeschlagen (' + (e && e.name || e) + ')'); }
       fade(music, 0.85, 4000); return true;
+    } catch (e) {
+      musicError = `„${t.name}“: ${e.message || e}. Bitte in den Einstellungen neu laden.`;
+      t.broken = true;
     }
   }
   const pad = makePad(); if (!pad) return false;
-  music = { pad, name: 'Klangteppich' };
+  music = { pad, name: musicError ? 'Klangteppich (Musik fehlt)' : 'Klangteppich' };
   pad.out.gain.setTargetAtTime(0.55, pad.c.currentTime, 1.4); return true;
 }
 function release(m) {
@@ -330,25 +358,44 @@ async function toggleLove() {
   if (music) return stopMusic();
   setLove(true);
   if (!(await startMusic())) setLove(false); else setLove(true);
+  if (musicError) { $('said').textContent = musicError; }
 }
 function renderMusic() {
-  $('musicList').innerHTML = tracks.length ? tracks.map((t, i) => `<span class="chip">${esc(t.name)}<button data-mdel="${i}" aria-label="${esc(t.name)} löschen">×</button></span>`).join('') : '<p class="small">Noch keine Musik geladen.</p>';
+  $('musicList').innerHTML = tracks.length ? tracks.map((t, i) => `<span class="chip">${esc(t.name)}${t.broken ? ' <b style="color:var(--rose)">(nicht lesbar)</b>' : t.size ? ` <span class="small">${(t.size / 1048576).toFixed(1)} MB</span>` : ''}<button data-mdel="${i}" aria-label="${esc(t.name)} löschen">×</button></span>`).join('') : '<p class="small">Noch keine Musik geladen.</p>';
   $('sMusicSel').innerHTML = (tracks.length > 1 ? '<option value="rotate">Abwechselnd</option>' : '') + tracks.map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('') + (tracks.length ? '' : '<option value="">Klangteppich</option>');
   $('sMusicSel').value = S.music && (S.music === 'rotate' || tracks.some(t => String(t.id) === String(S.music))) ? S.music : (tracks[0] ? String(tracks[0].id) : '');
 }
 $('mAdd').onclick = () => $('mFile').click();
 $('mFile').onchange = async e => {
   const files = [...e.target.files]; e.target.value = '';
-  $('mOut').textContent = 'Speichere …';
-  for (const f of files) { const id = Date.now() + '-' + Math.random().toString(36).slice(2, 7); await idb.set('m|' + id, f); tracks.push({ id, name: f.name }); }
-  await idb.set('tracks', tracks); renderMusic(); $('mOut').textContent = `${files.length} Stück(e) gespeichert.`;
+  const ok = [], bad = [];
+  for (const f of files) {
+    $('mOut').textContent = `Kopiere „${f.name}“ in die App …`;
+    try {
+      const buf = await f.arrayBuffer();                       // echte Kopie, kein Verweis auf die Datei
+      const id = Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+      await idb.setStrict('m|' + id, { buf, type: f.type || guessType(f.name), size: buf.byteLength });
+      const back = await idb.getStrict('m|' + id);             // gegenlesen
+      if (!back || !back.buf || back.buf.byteLength !== buf.byteLength) throw new Error('Gegenlesen fehlgeschlagen');
+      tracks.push({ id, name: f.name, size: buf.byteLength }); ok.push(f.name);
+    } catch (err) { bad.push(`${f.name} (${err && (err.name === 'QuotaExceededError' ? 'Speicher voll' : err.message || err.name)})`); }
+  }
+  await idb.set('tracks', tracks.map(({ broken, ...t }) => t)); renderMusic();
+  $('mOut').textContent = (ok.length ? `${ok.length} Stück(e) gespeichert.` : '') + (bad.length ? ` Fehler: ${bad.join(', ')}` : '');
+  checkTracks();
 };
+async function checkTracks() {
+  for (const t of tracks) { try { await trackBlob(t); t.broken = false; } catch (e) { t.broken = true; t.why = e.message; } }
+  renderMusic();
+  const n = tracks.filter(t => t.broken).length;
+  if (n) $('mOut').textContent = `${n} Stück(e) nicht lesbar: ${tracks.filter(t => t.broken).map(t => t.name + ' – ' + t.why).join('; ')}. Bitte löschen und neu laden.`;
+}
 $('musicList').onclick = async e => {
   const b = e.target.closest('[data-mdel]'); if (!b) return;
-  const [t] = tracks.splice(+b.dataset.mdel, 1); await idb.set('m|' + t.id, null); await idb.set('tracks', tracks); renderMusic();
+  const [t] = tracks.splice(+b.dataset.mdel, 1); await idb.del('m|' + t.id); await idb.set('tracks', tracks.map(({ broken, why, ...x }) => x)); renderMusic();
 };
 $('sMusicSel').onchange = () => { S.music = $('sMusicSel').value; saveS(); };
-$('mTest').onclick = async () => { if (music) { stopMusic(1500); $('mTest').textContent = 'Probehören'; } else { await startMusic(); $('mTest').textContent = 'Ausblenden'; } };
+$('mTest').onclick = async () => { if (music) { stopMusic(1500); $('mTest').textContent = 'Probehören'; } else { await startMusic(); $('mTest').textContent = 'Ausblenden'; $('mOut').textContent = musicError || `Spielt: ${music ? music.name : '–'}`; } };
 loadTracks();
 
 // ---------- Sitzung ----------
@@ -570,7 +617,7 @@ function syncStart() {
 }
 function openSettings() {
   $('sKey').value = S.key; $('sModel').value = S.model; $('sPerson').value = FORM[S.person] ? S.person : 'mix'; $('sPV').value = S.pv;
-  $('refText').textContent = REF_TEXT; renderOwn(); renderMusic(); show('settings');
+  $('refText').textContent = REF_TEXT; renderOwn(); renderMusic(); checkTracks(); show('settings');
 }
 $('toSet').onclick = openSettings;
 $('setBack').onclick = () => { stopMusic(800); $('mTest').textContent = 'Probehören'; S.key = $('sKey').value.trim(); S.model = $('sModel').value.trim() || DEFAULT_MODEL; S.person = $('sPerson').value; saveS(); syncStart(); show('start'); };
