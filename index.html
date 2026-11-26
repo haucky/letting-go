@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#141118">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<title>Loslassen</title>
+<style>
+/* VOICE: tender, quiet, almost nothing on screen
+   IDEA: a candle flame in a dark room — one soft light that breathes
+   PICTURE: a large breathing ring that is also the timer
+   COLOUR and TYPE: night plum ground, pale lilac light, warm rose accent; system sans, large
+   LAYOUT: one screen per phase, buttons fill the screen so you can hit them half-blind */
+:root{color-scheme:dark;--bg:#141118;--ink:#eee8f4;--dim:#9a8fa8;--lil:#c9b6ff;--rose:#ff9fb2;--btn:#251f2e;--btn2:#2f2739;--line:#2e2638}
+*{box-sizing:border-box;min-width:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden;user-select:none;-webkit-user-select:none}
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;padding:max(14px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(14px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}
+.screen[hidden]{display:none}
+.top{display:flex;justify-content:space-between;align-items:center;color:var(--dim);font-size:14px;min-height:44px;gap:8px}
+.top button,.link{background:none;border:0;color:var(--dim);font:inherit;padding:8px;min-height:44px;text-decoration:underline;text-underline-offset:3px}
+button{font-family:inherit;cursor:pointer}
+button:disabled{opacity:.45;cursor:default}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--lil);outline-offset:2px}
+h1{font-weight:300;font-size:44px;line-height:1.05;margin:4px 0}
+h2{font-weight:500;font-size:20px;margin:26px 0 8px}
+.lead{color:var(--dim);margin:0 0 16px;max-width:36ch}
+.status{color:var(--dim);font-size:14px;margin:0 0 12px;min-height:1.5em}
+.opts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+label.f{display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--dim)}
+select,input[type=text],input[type=password]{font:16px system-ui,sans-serif;background:var(--btn);color:var(--ink);border:1px solid #3a3145;border-radius:14px;padding:12px;min-height:48px;width:100%;user-select:text}
+.big{border:0;border-radius:28px;background:var(--lil);color:#1a1422;font-size:30px;font-weight:600;min-height:30dvh;width:100%;margin-top:auto}
+.big:active,.tile:active,.half:active,.sub:active,.back:active{transform:scale(.985);filter:brightness(1.15)}
+.stage{flex:1;display:grid;place-items:center;position:relative;min-height:0}
+.ring{width:min(70vw,40dvh);aspect-ratio:1;position:relative;display:grid;place-items:center}
+.ring svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.glow{position:absolute;inset:12%;border-radius:50%;background:radial-gradient(circle,rgba(201,182,255,.28),rgba(201,182,255,.06) 60%,transparent 72%);animation:breathe 10s ease-in-out infinite}
+@keyframes breathe{0%,100%{transform:scale(.88)}50%{transform:scale(1.06)}}
+@media (prefers-reduced-motion:reduce){.glow{animation:none}}
+.in{position:relative;text-align:center;padding:0 12%}
+.word{font-size:clamp(26px,8vw,40px);line-height:1.1;overflow-wrap:anywhere}
+.time{color:var(--dim);font-size:16px;margin-top:6px;font-variant-numeric:tabular-nums}
+.prompt{min-height:2.8em;text-align:center;font-size:19px;font-weight:300;max-width:30ch;margin:0 auto 8px;transition:opacity .6s}
+.sub{border:0;background:var(--btn);color:var(--ink);border-radius:22px;font-size:20px;min-height:72px;width:100%}
+.back{border:0;border-radius:28px;background:var(--rose);color:#1a1422;font-size:28px;font-weight:600;min-height:32dvh;width:100%;margin-bottom:10px;line-height:1.15;padding:10px}
+.back small{display:block;font-size:15px;font-weight:400;opacity:.75;margin-top:6px}
+.grid{flex:1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:minmax(64px,1fr);gap:10px;margin-top:6px;overflow:auto;align-content:stretch}
+.tile{border:0;border-radius:20px;background:var(--btn);color:var(--ink);font-size:clamp(19px,5.6vw,24px);padding:6px;overflow-wrap:anywhere}
+.tile:nth-child(4n+2),.tile:nth-child(4n+3){background:var(--btn2)}
+.tile.own{background:#33263a;border:1px solid #5a3f56}
+.bar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:10px}
+.rec{grid-column:1/-1;border:0;border-radius:20px;background:var(--btn2);color:var(--ink);font-size:20px;min-height:68px}
+.rec.on{background:var(--rose);color:#1a1422;font-weight:600}
+.rec.done{background:#3a3150;color:var(--lil)}
+.go{border:0;border-radius:14px;background:var(--lil);color:#1a1422;font-size:18px;font-weight:600;padding:0 20px;min-height:48px}
+.halves{flex:1;display:grid;grid-template-rows:1fr 1fr;gap:12px;margin-top:6px}
+.half{border:0;border-radius:28px;font-size:clamp(26px,8vw,36px);line-height:1.15;padding:10px}
+.half small{display:block;font-size:16px;opacity:.7;margin-top:6px}
+.h1{background:var(--btn2);color:var(--ink)}.h2{background:var(--lil);color:#1a1422}
+.scroll{flex:1;overflow:auto;margin:0 -14px;padding:0 14px 30px;user-select:text}
+.row{display:flex;gap:12px;padding:12px 2px;border-bottom:1px solid var(--line);align-items:baseline;flex-wrap:wrap}
+.row .t{color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
+.row .fw{flex:1;font-size:19px}
+.row .n{color:var(--rose);white-space:nowrap}
+.row .d{flex-basis:100%;color:var(--dim);font-size:14px;margin:2px 0 0}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.btns button,.btn{border:0;border-radius:16px;min-height:52px;font-size:17px;background:var(--btn);color:var(--ink);padding:0 14px}
+.btns button.p,.btn.p{background:var(--lil);color:#1a1422;font-weight:600}
+.btn.r{background:var(--rose);color:#1a1422;font-weight:600}
+.card{background:#1b1621;border:1px solid var(--line);border-radius:18px;padding:14px;margin:8px 0;display:grid;gap:10px}
+.ref{font-size:19px;line-height:1.55;font-weight:300;color:var(--ink);background:#221b2a;border-radius:14px;padding:14px;margin:0}
+.small{font-size:14px;color:var(--dim);margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--btn);border-radius:999px;padding:4px 4px 4px 14px}
+.chip button{background:none;border:0;color:var(--dim);min-width:40px;min-height:40px;font-size:18px}
+.meter{height:8px;border-radius:4px;background:#2b2433;overflow:hidden}.meter i{display:block;height:100%;width:0;background:var(--lil);transition:width .2s}
+.said{text-align:center;color:var(--lil);font-size:17px;min-height:1.5em;margin:0 auto 8px;max-width:32ch}
+</style>
+</head>
+<body>
+
+<section class="screen" id="start">
+  <div class="top"><span>Loslassen · nach Hawkins</span><button id="toSet">Einstellungen</button></div>
+  <h1>Loslassen</h1>
+  <p class="lead">Spüren, benennen, da sein lassen. Wenn du abdriftest, holt dich der große Knopf zurück ins Gefühl.</p>
+  <p class="status" id="startStatus"></p>
+  <div class="opts">
+    <label class="f">Gesamtdauer<select id="oTotal"><option value="10">10 Min</option><option value="15">15 Min</option><option value="20">20 Min</option><option value="30">30 Min</option><option value="45">45 Min</option></select></label>
+    <label class="f">Reinspüren<select id="oFeel"><option value="15">15 Sek</option><option value="30">30 Sek</option><option value="45">45 Sek</option><option value="60">60 Sek</option></select></label>
+    <label class="f">Loslassen<select id="oLet"><option value="60">1 Min</option><option value="90">1,5 Min</option><option value="120">2 Min</option><option value="180">3 Min</option></select></label>
+    <label class="f">Stimme<select id="oVoice"><option value="pocket">KI-Stimme</option><option value="browser">Browser-Stimme</option><option value="off">Aus</option></select></label>
+  </div>
+  <button class="big" id="bStart">Beginnen</button>
+</section>
+
+<section class="screen" id="settings" hidden>
+  <div class="top"><button id="setBack">Zurück</button><span>Einstellungen</span></div>
+  <div class="scroll">
+    <h2>Gemini (Sätze aus deiner Aufnahme)</h2>
+    <div class="card">
+      <label class="f">API-Key<input type="password" id="sKey" autocomplete="off" placeholder="AIza…"></label>
+      <label class="f">Modell<input type="text" id="sModel" autocomplete="off"></label>
+      <p class="small">Key kostenlos unter aistudio.google.com/apikey. Er bleibt nur auf diesem Gerät.</p>
+      <div class="btns"><button id="sTest">Verbindung testen</button><select id="sPerson" aria-label="Satzform"><option value="ich">Sätze in Ich-Form</option><option value="du">Sätze in Du-Form</option></select></div>
+      <p class="small" id="sTestOut"></p>
+    </div>
+
+    <h2>KI-Stimme (Kyutai Pocket TTS)</h2>
+    <div class="card">
+      <label class="f">Stimme<select id="sPV"><option value="juergen">Jürgen (eingebaut)</option><option value="cloned">Meine eigene Stimme</option></select></label>
+      <button class="btn p" id="sPrep">Modell laden und Ansagen vorbereiten</button>
+      <div class="meter"><i id="sBar"></i></div>
+      <p class="small" id="sPrepOut">Einmalig ca. 180 MB (mit eigener Stimme ca. 220 MB). Danach bleibt das Modell im Speicher der App.</p>
+      <button class="btn" id="sTry">Probe anhören</button>
+    </div>
+
+    <h2>Eigene Stimme aufnehmen</h2>
+    <div class="card">
+      <p class="small">Leise, ruhig und langsam lesen, so wie du in der Meditation mit dir sprechen würdest. Ruhiger Raum, Handy etwa 20 cm vor dem Mund. Bis zu 20 Sekunden werden verwendet.</p>
+      <p class="ref" id="refText"></p>
+      <button class="btn r" id="cRec">Aufnahme starten</button>
+      <div class="btns"><button id="cPlay" disabled>Anhören</button><button class="p" id="cUse" disabled>Als Stimme verwenden</button></div>
+      <p class="small" id="cOut"></p>
+    </div>
+
+    <h2>Meine Gefühle</h2>
+    <div class="card">
+      <div class="chips" id="ownList"></div>
+      <div class="btns"><button id="xExport">JSON exportieren</button><button id="xImport">JSON importieren</button></div>
+      <input type="file" id="xFile" accept="application/json,.json" hidden>
+      <p class="small" id="xOut"></p>
+    </div>
+    <p class="small">Pocket TTS von Kyutai, ONNX-Port von thewh1teagle (CC BY 4.0).</p>
+  </div>
+</section>
+
+<section class="screen" id="feel" hidden>
+  <div class="top"><span class="rest"></span><button data-stop>Beenden</button></div>
+  <div class="stage"><div class="ring"><div class="glow"></div>
+    <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="47" fill="none" stroke="#2b2433" stroke-width="2"/><circle id="rF" cx="50" cy="50" r="47" fill="none" stroke="#c9b6ff" stroke-width="2.4" stroke-linecap="round" pathLength="100" stroke-dasharray="100" stroke-dashoffset="0"/></svg>
+    <div class="in"><div class="word">Spür rein</div><div class="time" id="tF">0:30</div></div></div></div>
+  <p class="prompt">Was ist gerade da? Druck, Enge, ein Ziehen, ein Gedanke?</p>
+  <button class="sub" id="bFeelSkip">Ich spüre schon was</button>
+</section>
+
+<section class="screen" id="choose" hidden>
+  <div class="top"><span>Was willst du loslassen?</span><span class="rest"></span></div>
+  <div class="grid" id="grid"></div>
+  <form class="bar" id="ownF">
+    <button type="button" class="rec" id="bRec">Aufnahme: sprich aus, was da ist</button>
+    <input type="text" id="own" placeholder="Eigenes Wort …" autocomplete="off" enterkeyhint="go">
+    <button type="submit" class="go">Los</button>
+  </form>
+</section>
+
+<section class="screen" id="let" hidden>
+  <div class="top"><span class="rest"></span><button data-stop>Beenden</button></div>
+  <div class="stage"><div class="ring"><div class="glow"></div>
+    <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="47" fill="none" stroke="#2b2433" stroke-width="2"/><circle id="rL" cx="50" cy="50" r="47" fill="none" stroke="#ff9fb2" stroke-width="2.4" stroke-linecap="round" pathLength="100" stroke-dasharray="100" stroke-dashoffset="0"/></svg>
+    <div class="in"><div class="word" id="letWord">Druck</div><div class="time" id="tL">2:00</div></div></div></div>
+  <p class="prompt" id="letPrompt">Lass es ganz da sein.</p>
+  <p class="said" id="said"></p>
+  <button class="back" id="bBack">Zurück ins Gefühl<small id="backInfo">Sätze werden vorbereitet …</small></button>
+  <button class="sub" id="bLetDone">Ist gegangen</button>
+</section>
+
+<section class="screen" id="check" hidden>
+  <div class="top"><span>Wie ist es jetzt?</span><span class="rest"></span></div>
+  <div class="halves">
+    <button class="half h1" id="bMore">Mehr Zeit<small id="moreLbl"></small></button>
+    <button class="half h2" id="bAgain">Neu reinspüren<small>Wie fühle ich mich jetzt?</small></button>
+  </div>
+</section>
+
+<section class="screen" id="end" hidden>
+  <div class="top"><span>Sitzung beendet</span></div>
+  <h1>Gut gemacht.</h1>
+  <p class="status" id="sum"></p>
+  <div class="scroll" id="log"></div>
+  <div class="btns"><button id="bExport2">JSON exportieren</button><button class="p" id="bRestart">Neue Sitzung</button></div>
+</section>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
