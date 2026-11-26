@@ -6,7 +6,9 @@ Meditations-PWA nach David R. Hawkins' *Letting Go*: spüren, benennen, da sein 
 
 1. **Reinspüren** (z. B. 30 s)
 2. **Benennen**: eine Kachel antippen, ein eigenes Wort eintippen oder eine Aufnahme sprechen (geht auch kombiniert)
-3. **Loslassen** (z. B. 2 Min). Im Hintergrund schreibt Gemini aus der Aufnahme 3–5 Sätze, Pocket TTS spricht sie ein. Der große Knopf **„Zurück ins Gefühl“** spielt sie der Reihe nach ab.
+3. **Loslassen** (z. B. 2 Min), mit zwei großen Knöpfen:
+   - **Gefühl verstärken**: Gemini zieht aus der Aufnahme 4–6 Glaubenssätze, unterschiedlich formuliert. Pocket TTS spricht sie ein, und sie werden der Reihe nach abgespielt.
+   - **In den Körper**: feste Anker-Sätze für den Fall, dass du dissoziiert bist
 4. **Mehr Zeit** oder **Neu reinspüren**
 
 ## Einrichtung

@@ -7,7 +7,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const FEEL = ['Druck', 'Enge', 'Unruhe', 'Angst', 'Gehetzt', 'Gedanken', 'Ärger', 'Schwere', 'Traurig', 'Weiß nicht'];
 const PROMPTS = ['Lass es ganz da sein.', 'Du musst nichts daran ändern.', 'Spür die Energie dahinter, nicht die Gedanken.', 'Wo im Körper sitzt es?', 'Lass auch den Widerstand da sein.', 'Darf es gehen?', 'Nur dieses Gefühl. Nichts sonst.'];
 const SAY = { feel: 'Spür rein. Was ist gerade da?', choose: 'Was willst du loslassen?', check: 'Wie ist es jetzt?', end: 'Die Zeit ist um.' };
-const FIXED = [...Object.values(SAY), ...PROMPTS];
+const ANCHORS = ['Spür deine Füße auf dem Boden.', 'Spür das Gewicht deines Körpers auf der Unterlage.', 'Ein Atemzug. Spür, wie die Luft einströmt.', 'Spür deine Hände. Wärme, Kribbeln, Gewicht.', 'Hör ein Geräusch im Raum. Du bist hier.', 'Wo ist gerade die stärkste Empfindung im Körper?', 'Spür dein Gesicht, deinen Kiefer, deine Schultern.'];
+const FIXED = [...Object.values(SAY), ...PROMPTS, ...ANCHORS];
 const REF_TEXT = 'Ich sitze ruhig da und spüre, was gerade in mir ist. Da ist ein leichter Druck in der Brust, vielleicht auch etwas Enge im Bauch. Ich muss nichts daran ändern. Ich lasse es einfach da sein, so wie es ist, und atme weiter. Gedanken kommen und gehen, und ich bleibe bei dem Gefühl.';
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 
@@ -16,7 +17,7 @@ const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 };
-const S = Object.assign({ total: 20, feel: 30, let: 120, voice: 'pocket', pv: 'juergen', key: '', model: DEFAULT_MODEL, person: 'ich', cloneId: 0 }, LS.get('ll-set', {}));
+const S = Object.assign({ total: 20, feel: 30, let: 120, voice: 'pocket', pv: 'juergen', key: '', model: DEFAULT_MODEL, person: 'mix', cloneId: 0 }, LS.get('ll-set', {}));
 const saveS = () => LS.set('ll-set', S);
 let OWN = LS.get('ll-own', []);           // [{name, created, count}]
 const saveOwn = () => LS.set('ll-own', OWN);
@@ -197,30 +198,32 @@ function say(text) {
 }
 
 // ---------- Gemini ----------
-function fallbackSentences(f, person) {
-  const ich = person !== 'du';
-  const w = f && f !== '…' ? f : (ich ? 'dieses Gefühl' : 'dieses Gefühl');
-  return ich
-    ? [`Da ist ${w}. Ich spüre es jetzt.`, 'Ich spüre, wo es im Körper sitzt.', 'Ich lasse es genau so da sein, wie es ist.', 'Ich muss nichts daran ändern.']
-    : [`Da ist ${w}. Spür es jetzt.`, 'Spür, wo es im Körper sitzt.', 'Lass es genau so da sein, wie es ist.', 'Du musst nichts daran ändern.'];
+function fallbackSentences(f) {
+  const w = f && f !== '…' ? f : 'dieses Gefühl';
+  return [`Da ist ${w}.`, `${w}. Genau jetzt.`, `Wann war ${w} heute schon da?`, `Lass ${w} noch einmal ganz hochkommen.`];
 }
+const FORM = {
+  mix: 'Mische die Formen bewusst: Du-Form, wie eine innere Stimme sie sagt ("Du schaffst das nie."), Ich-Form als eigene Überzeugung ("Ich bin nicht gut genug."), als nackte Behauptung ("Das wird nichts.") und als Befürchtung ("Gleich merken alle, dass …"). Jede Form kann einen anderen Nerv treffen.',
+  ich: 'Ich-Form, als eigene Überzeugung ("Ich bin nicht gut genug.", "Ich schaffe das nie.").',
+  du: 'Du-Form, wie eine innere Stimme sie sagt ("Du bist nichts wert.", "Du schaffst das nie.").'
+};
 async function gemini(feeling, audioB64) {
-  const ich = S.person !== 'du';
-  const prompt = `Du unterstützt eine Meditation nach David R. Hawkins ("Letting Go"). Ich lasse gerade ein Gefühl los.
+  const prompt = `Du unterstützt eine Meditation nach David R. Hawkins ("Letting Go"). Beim Loslassen lasse ich ein Gefühl ganz hochkommen und da sein, ohne mich dagegen zu wehren, bis es sich auflöst. Dafür muss das Gefühl spürbar sein.
 Benanntes Gefühl/Zustand: "${feeling === '…' ? 'noch nicht benannt' : feeling}".
-${audioB64 ? 'Im Audio spreche ich aus, was ich gerade loslassen will und welche Gedanken dazu kommen.' : 'Es gibt keine Aufnahme.'}
+${audioB64 ? 'Im Audio spreche ich aus, was ich gerade loslassen will und welche Gedanken dazu kommen.' : 'Es gibt keine Aufnahme. Leite die Sätze aus typischen Überzeugungen hinter diesem Gefühl ab, eher zurückhaltend.'}
 
 Aufgaben:
 1. ${audioB64 ? 'Transkribiere das Audio wörtlich auf Deutsch in "transcript".' : 'Setze "transcript" auf einen leeren String.'}
 2. Benenne das Gefühl in "label" mit ein bis drei Wörtern.
-3. Schreibe 3 bis 5 kurze Sätze in "sentences". Sie werden mir vorgelesen, wenn ich während des Loslassens dissoziiere, also mich nicht mehr spüre oder mich in Gedanken verliere. Sie sollen mich zurück IN dieses Gefühl bringen, damit ich es ganz da sein lassen kann.
+3. Schreibe 4 bis 6 kurze Sätze in "sentences". Ich drücke einen Knopf "Gefühl verstärken", wenn ich mich in anderen Gedanken verloren habe, und bekomme dann einen dieser Sätze vorgelesen. Jeder Satz soll das Gefühl wieder aufflammen lassen, damit ich es loslassen kann.
 
-Regeln für die Sätze:
-- ${ich ? 'Ich-Form ("Ich spüre …", "Da ist …")' : 'Du-Form ("Du spürst …", "Da ist …")'}, Präsens, höchstens 12 Wörter, schlicht und ruhig.
-- Satz 1 greift den konkreten Auslöser auf (Situation, Gedanke, meine eigenen Worte aus dem Audio), damit das Gefühl wieder spürbar wird.
-- Die weiteren Sätze führen weg von den Gedanken hin zur Körperempfindung (wo, wie: Druck, Enge, Hitze, Ziehen …) und zum Da-sein-lassen.
-- Keine Ratschläge, keine Lösungen, kein Trost, keine Beruhigung, kein "entspann dich", keine Bewertung, keine Warum-Fragen.
-- Nicht dramatisieren und nichts erfinden, was nicht im Audio oder im Gefühl steckt.`;
+So entstehen die Sätze:
+- Zieh aus dem Audio die Glaubenssätze, Befürchtungen, Selbstvorwürfe und Situationen, die darin stecken oder angedeutet sind, und sprich sie direkt und unverblümt aus (z. B. "Du bist nichts wert.", "Du wirst das nie schaffen.", "Alle anderen kriegen das hin.").
+- ${FORM[S.person] || FORM.mix}
+- Verschiedene Sätze sollen verschiedene Glaubenssätze oder Seiten davon treffen, nicht dasselbe fünfmal.
+- Präsens, höchstens 10 Wörter, gesprochene Sprache. Konkrete Situationen und meine eigenen Wörter aus dem Audio nutzen, wo möglich.
+- Nur, was im Audio oder im Gefühl angelegt ist: nichts Härteres erfinden, keine Themen dazudichten.
+- Keine Körperanweisungen, keine Ratschläge, keine Lösungen, kein Trost, keine Relativierung, keine Fragen.`;
   const parts = [{ text: prompt }];
   if (audioB64) parts.push({ inline_data: { mime_type: 'audio/wav', data: audioB64 } });
   const body = {
@@ -238,7 +241,7 @@ Regeln für die Sätze:
   if (!r.ok) throw new Error((j.error && j.error.message) || ('HTTP ' + r.status));
   const txt = (((j.candidates || [])[0] || {}).content || {}).parts?.map(p => p.text || '').join('') || '';
   const out = JSON.parse(txt);
-  out.sentences = (out.sentences || []).map(s => String(s).trim()).filter(Boolean).slice(0, 5);
+  out.sentences = (out.sentences || []).map(s => String(s).trim()).filter(Boolean).slice(0, 6);
   if (!out.sentences.length) throw new Error('keine Sätze erhalten');
   return out;
 }
@@ -307,7 +310,7 @@ async function pick(f) {
   else rememberOwn(f);
   $('own').value = ''; $('own').blur();
   const audio = pending; pending = null;
-  cur = { t: new Date().toISOString(), f, r: 1, gone: false, hadAudio: !!audio, transcript: '', sentences: fallbackSentences(f, S.person), source: 'standard', audio: [], idx: 0 };
+  cur = { t: new Date().toISOString(), f, r: 1, gone: false, hadAudio: !!audio, transcript: '', sentences: fallbackSentences(f), source: 'standard', audio: [], idx: 0 };
   log.push(cur);
   toLet();
   makeSentences(cur, audio);
@@ -319,7 +322,7 @@ async function makeSentences(entry, audio) {
       const out = await gemini(entry.f, audio && audio.b64);
       entry.sentences = out.sentences; entry.transcript = out.transcript || ''; entry.label = out.label || '';
       entry.source = 'gemini'; entry.idx = 0; entry.audio = [];
-      if (entry.f === '…' && out.label) { entry.f = out.label; if (cur === entry && state === 'let') $('letWord').textContent = entry.f; }
+      if (entry.f === '…' && out.label) { entry.f = out.label; if (cur === entry && state === 'let') setWord(entry.f); }
     } catch (e) { entry.source = 'standard'; entry.error = String(e.message || e); }
   }
   setBackInfo();
@@ -334,9 +337,15 @@ async function makeSentences(entry, audio) {
 function setBackInfo() {
   if (!cur) return;
   const n = cur.sentences.length, ready = cur.audio.filter(Boolean).length;
-  let t = cur.source === 'gemini' ? `${n} Sätze aus deiner Aufnahme` : (S.key ? (cur.error ? 'Gemini-Fehler, Standardsätze' : 'Sätze werden erstellt …') : `${n} Standardsätze`);
-  if (S.voice === 'pocket' && ready < n) t += ` · Stimme ${ready}/${n}`;
+  let t = cur.source === 'gemini' ? `${n} Sätze${cur.hadAudio ? ' aus der Aufnahme' : ''}` : (S.key ? (cur.error ? 'Gemini-Fehler · Standard' : 'werden erstellt …') : `${n} Standardsätze`);
+  if (S.voice === 'pocket' && ready < n) t += ` · vertont ${ready}/${n}`;
   $('backInfo').textContent = t;
+}
+let ai = 0;
+function anchor() {
+  const text = ANCHORS[ai++ % ANCHORS.length];
+  $('said').textContent = text; nextPrompt = Date.now() + 30000;
+  stopVoice(); say(text);
 }
 function backToFeeling() {
   if (!cur) return;
@@ -350,8 +359,9 @@ function backToFeeling() {
   browserSpeak(text);
 }
 
+function setWord(w) { const el = $('letWord'); el.textContent = w; el.classList.toggle('long', w.length > 11); }
 function toLet() {
-  show('let'); $('letWord').textContent = cur.f; $('said').textContent = '';
+  show('let'); setWord(cur.f); $('said').textContent = '';
   phase(S.let); pi = 0; nextPrompt = Date.now() + 24000;
   $('letPrompt').textContent = PROMPTS[0]; say(PROMPTS[0]); setBackInfo();
 }
@@ -426,7 +436,7 @@ function syncStart() {
   $('startStatus').textContent = parts.join(' · ');
 }
 function openSettings() {
-  $('sKey').value = S.key; $('sModel').value = S.model; $('sPerson').value = S.person; $('sPV').value = S.pv;
+  $('sKey').value = S.key; $('sModel').value = S.model; $('sPerson').value = FORM[S.person] ? S.person : 'mix'; $('sPV').value = S.pv;
   $('refText').textContent = REF_TEXT; renderOwn(); show('settings');
 }
 $('toSet').onclick = openSettings;
@@ -500,6 +510,7 @@ $('bFeelSkip').onclick = toChoose;
 $('grid').onclick = e => { const b = e.target.closest('[data-f]'); if (b) pick(b.dataset.f); };
 $('ownF').onsubmit = e => { e.preventDefault(); pick($('own').value); };
 $('bBack').onclick = backToFeeling;
+$('bAnchor').onclick = anchor;
 $('bLetDone').onclick = () => { cur.gone = true; toCheck(); };
 $('bMore').onclick = () => { cur.r++; cur.gone = false; toLet(); };
 $('bAgain').onclick = toFeel;

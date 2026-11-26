@@ -1,6 +1,6 @@
 // Offline-Cache + Cross-Origin-Isolation (für mehrere Threads in onnxruntime).
 // Das große KI-Modell cached pocket-tts selbst im Cache API ("pocket-tts…").
-const C = 'loslassen-v2';
+const C = 'loslassen-v3';
 const SHELL = ['./', 'index.html', 'app.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'vendor/pocket-tts.js', 'vendor/pocket-tts-worker.js'];
 
 self.addEventListener('install', e => {
