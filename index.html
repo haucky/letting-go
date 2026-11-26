@@ -45,9 +45,10 @@ select,input[type=text],input[type=password]{font:16px system-ui,sans-serif;back
 .time{color:var(--dim);font-size:16px;margin-top:6px;font-variant-numeric:tabular-nums}
 .prompt{min-height:2.8em;text-align:center;font-size:19px;font-weight:300;max-width:30ch;margin:0 auto 8px;transition:opacity .6s}
 .sub{border:0;background:var(--btn);color:var(--ink);border-radius:22px;font-size:20px;min-height:72px;width:100%}
-.two{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:10px}
 .back.love{background:#4a2f3a;color:#ffd6c2}.back.love.on{background:#ffd6c2;color:#3a1f28}
-.back{border:0;border-radius:24px;background:var(--rose);color:#1a1422;font-size:clamp(17px,5vw,24px);font-weight:600;min-height:34dvh;width:100%;line-height:1.15;padding:10px}
+.back.wut{background:#4a2420;color:#ffb199}.back.wut.on{background:#ff7a59;color:#2a0f0a}
+.back{border:0;border-radius:24px;background:var(--rose);color:#1a1422;font-size:clamp(19px,5.6vw,25px);font-weight:600;min-height:20dvh;width:100%;line-height:1.15;padding:10px}
 .back.anc{background:#3a3150;color:var(--lil)}
 .next{display:none;border:0;border-radius:28px;background:var(--lil);color:#1a1422;font-size:28px;font-weight:600;min-height:24dvh;width:100%;margin-bottom:10px}
 .next:active{transform:scale(.985);filter:brightness(1.15)}
@@ -56,7 +57,7 @@ select,input[type=text],input[type=password]{font:16px system-ui,sans-serif;back
 #let.sedona .ring .word{font-size:clamp(15px,4.4vw,19px)}
 #let.sedona .time{font-size:12px;margin-top:2px}
 #let.sedona .prompt{font-size:clamp(21px,6vw,26px);font-weight:400;min-height:3.6em;display:grid;place-items:center;margin-top:6px}
-#let.sedona .back{min-height:17dvh;font-size:clamp(18px,5vw,22px)}
+#let.sedona .back{min-height:11dvh;font-size:clamp(17px,4.8vw,21px);padding:6px}
 #let.sedona .back small{display:none}
 #let.sedona .sub{min-height:52px;font-size:17px}
 .back small{display:block;font-size:14px;hyphens:auto;-webkit-hyphens:auto;font-weight:400;opacity:.75;margin-top:6px}
@@ -114,6 +115,17 @@ select,input[type=text],input[type=password]{font:16px system-ui,sans-serif;back
 <section class="screen" id="settings" hidden>
   <div class="top"><button id="setBack">Zurück</button><span>Einstellungen</span></div>
   <div class="scroll">
+    <h2>Ordner auf dem Handy</h2>
+    <div class="card">
+      <p class="small" id="dirStatus">Kein Ordner verbunden.</p>
+      <div class="btns"><button class="p" id="dirPick">Ordner wählen</button><button id="dirScan">Neu einlesen</button></div>
+      <p class="small">Am besten einen eigenen Ordner anlegen, z. B. <b>Dokumente/Loslassen</b>. Die App legt darin an:<br>
+      <b>stimmen/</b> Referenzaufnahmen und <b>stimmen.json</b> mit den Namen<br>
+      <b>liebe/</b> und <b>wut/</b> Lieder für die beiden Knöpfe<br>
+      <b>daten/</b> deine Gefühle und Sitzungen als JSON<br>
+      Dateien, die du selbst hineinkopierst, erkennt die App beim nächsten Einlesen.</p>
+    </div>
+
     <h2>Gemini (Glaubenssätze aus deiner Aufnahme)</h2>
     <div class="card">
       <label class="f">API-Key<input type="password" id="sKey" autocomplete="off" placeholder="AIza…"></label>
@@ -125,30 +137,44 @@ select,input[type=text],input[type=password]{font:16px system-ui,sans-serif;back
 
     <h2>KI-Stimme (Kyutai Pocket TTS)</h2>
     <div class="card">
-      <label class="f">Stimme<select id="sPV"><option value="juergen">Jürgen (eingebaut)</option><option value="cloned">Meine eigene Stimme</option></select></label>
+      <div class="chips" id="voiceList"></div>
+      <label class="f">Grundstimme (Ansagen, Anker)<select class="vsel" data-role="base"></select></label>
+      <label class="f">Gefühl verstärken<select class="vsel" data-role="strengthen"></select></label>
+      <label class="f">Sedona-Fragen<select class="vsel" data-role="questions"></select></label>
       <button class="btn p" id="sPrep">Modell laden und Ansagen vorbereiten</button>
       <div class="meter"><i id="sBar"></i></div>
       <p class="small" id="sPrepOut">Einmalig ca. 180 MB (mit eigener Stimme ca. 220 MB). Danach bleibt das Modell im Speicher der App.</p>
       <button class="btn" id="sTry">Probe anhören</button>
     </div>
 
-    <h2>Eigene Stimme aufnehmen</h2>
+    <h2>Neue Stimme aufnehmen</h2>
     <div class="card">
       <p class="small">Leise, ruhig und langsam lesen, so wie du in der Meditation mit dir sprechen würdest. Ruhiger Raum, Handy etwa 20 cm vor dem Mund. Bis zu 20 Sekunden werden verwendet.</p>
       <p class="ref" id="refText"></p>
+      <label class="f">Name der Stimme<input type="text" id="cName" placeholder="z. B. Ich ruhig, Innerer Kritiker" autocomplete="off"></label>
       <button class="btn r" id="cRec">Aufnahme starten</button>
-      <div class="btns"><button id="cPlay" disabled>Anhören</button><button class="p" id="cUse" disabled>Als Stimme verwenden</button></div>
+      <div class="btns"><button id="cPlay" disabled>Anhören</button><button class="p" id="cUse" disabled>Als Stimme speichern</button></div>
       <p class="small" id="cOut"></p>
     </div>
 
-    <h2>Musik für den Liebe-Knopf</h2>
-    <div class="card">
-      <p class="small">Lade ein oder mehrere Stücke (MP3, M4A, OGG). Sie bleiben in der App gespeichert. Der Knopf blendet weich ein und beim zweiten Tippen weich aus und setzt beim nächsten Mal an derselben Stelle fort. Ohne eigene Musik spielt ein warmer, synthetischer Klangteppich.</p>
-      <div class="chips" id="musicList"></div>
-      <label class="f">Was spielt der Knopf?<select id="sMusicSel"></select></label>
-      <div class="btns"><button id="mAdd">Musik hinzufügen</button><button id="mTest">Probehören</button></div>
-      <input type="file" id="mFile" accept="audio/*" multiple hidden>
-      <p class="small" id="mOut"></p>
+    <h2>Musik: Liebe</h2>
+    <div class="card" data-cat="liebe">
+      <p class="small">Warm, haltend, fürsorglich. Einmal tippen blendet ein, nochmal tippen blendet aus. Beim nächsten Mal geht es an derselben Stelle weiter. Ohne Musik spielt ein warmer Klangteppich.</p>
+      <div class="chips mlist"></div>
+      <label class="f">Was spielt der Knopf?<select class="msel"></select></label>
+      <div class="btns"><button class="madd">Musik hinzufügen</button><button class="mtest">Probehören</button></div>
+      <input type="file" class="mfile" accept="audio/*" multiple hidden>
+      <p class="small mout"></p>
+    </div>
+
+    <h2>Musik: Wut</h2>
+    <div class="card" data-cat="wut">
+      <p class="small">Musik, die die Wut hochholt und spürbar macht, damit du sie loslassen kannst. Ohne Musik spielt ein dunkler, pulsierender Klang.</p>
+      <div class="chips mlist"></div>
+      <label class="f">Was spielt der Knopf?<select class="msel"></select></label>
+      <div class="btns"><button class="madd">Musik hinzufügen</button><button class="mtest">Probehören</button></div>
+      <input type="file" class="mfile" accept="audio/*" multiple hidden>
+      <p class="small mout"></p>
     </div>
 
     <h2>Meine Gefühle</h2>
@@ -191,7 +217,8 @@ select,input[type=text],input[type=password]{font:16px system-ui,sans-serif;back
   <div class="two">
     <button class="back" id="bBack">Gefühl verstärken<small id="backInfo">werden erstellt …</small></button>
     <button class="back anc" id="bAnchor">In den Körper<small>Anker, wenn du weg bist</small></button>
-    <button class="back love" id="bLove">Liebe<small id="loveInfo">Musik</small></button>
+    <button class="back love" id="bLove">Liebe<small id="info-liebe">Musik</small></button>
+    <button class="back wut" id="bWut">Wut<small id="info-wut">Musik</small></button>
   </div>
   <button class="next" id="bNext">Nächste Frage</button>
   <button class="sub" id="bLetDone">Ist gegangen</button>
